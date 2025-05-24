@@ -99,3 +99,12 @@ df_filter=df[df['Drawdown']>0.05]
 print(df_filter['Duration'].quantile(0.5))
 
 # Question 4
+ticker = 'AMZN'
+ticker_obj = yf.Ticker(ticker)
+start_date='1997-01-01'
+daily = ticker_obj.history(start=start_date)
+daily['2day_growth'] = daily['Close'].shift(-2) / daily['Close'] -1
+earnings = pd.read_csv("ha1_Amazon.csv",header=0, sep=';')
+earnings.columns = ['Symbol', 'Company', 'EarningsDate', 'EPSest', 'EPSrep', 'Surprise']
+print(earnings.head())
+# earnings['2day_growth']=daily['2day_growth'].iloc(earnings['EarningsDate'])
