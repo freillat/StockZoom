@@ -106,5 +106,10 @@ daily = ticker_obj.history(start=start_date)
 daily['2day_growth'] = daily['Close'].shift(-2) / daily['Close'] -1
 earnings = pd.read_csv("ha1_Amazon.csv",header=0, sep=';')
 earnings.columns = ['Symbol', 'Company', 'EarningsDate', 'EPSest', 'EPSrep', 'Surprise']
-print(earnings.head())
-# earnings['2day_growth']=daily['2day_growth'].iloc(earnings['EarningsDate'])
+earnings['timestamp_clean'] = earnings['EarningsDate'].str.replace(' EDT', '', regex=False).str.replace(' EST', '', regex=False)
+earnings['datetime'] = pd.to_datetime(earnings['timestamp_clean'], format='%B %d, %Y at %I %p')
+earnings['date_clean'] = earnings['datetime'].dt.date
+daily['date_clean']=daily.index.date
+merge_df = pd.merge(earnings, daily[['date_clean','2day_growth']], on='date_clean', how='left')
+surprise_df = merge_df[merge_df['Surprise']>0]
+print(surprise_df['2day_growth'].quantile(0.5)-merge_df['2day_growth'].quantile(0.5))
