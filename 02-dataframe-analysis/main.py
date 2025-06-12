@@ -36,11 +36,6 @@ except Exception as ex:
 df = tables[0]
 
 def get_company_class(company_name):
-    """
-    Categorizes company names based on predefined patterns.
-    Matches are case-insensitive and check for whole words.
-    The first matched pattern in the defined order is assigned.
-    """
     if not isinstance(company_name, str):
         # Handle non-string inputs, e.g., NaN, None, numbers
         return "Other"
@@ -67,15 +62,6 @@ def get_company_class(company_name):
     return "Other"
 
 def parse_price_range(price_range):
-    """
-    Parses a price range string and returns the average price as a float.
-    Handles single prices, price ranges, and '-' for None.
-
-    Examples:
-    '$8.00-$10.00' -> 9.0
-    '$5.00' -> 5.0
-    '-' -> None
-    """
     if not isinstance(price_range, str):
         # Handle non-string inputs (e.g., NaN, None) by returning None
         return None
@@ -107,10 +93,6 @@ def parse_price_range(price_range):
             return None
 
 def clean_and_convert_shares_offered(value):
-    """
-    Cleans and converts a string representation of shares offered to a numeric type (float).
-    Handles commas, strips whitespace, and returns pd.NA for invalid/missing values.
-    """
     if pd.isna(value) or value is None:
         return pd.NA # Explicitly return pandas' nullable NA for missing values
 
