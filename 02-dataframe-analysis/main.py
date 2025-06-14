@@ -252,10 +252,10 @@ except Exception as ex:
 
 df = tables[0]
 df['IPO Date'] = pd.to_datetime(df['IPO Date'], errors='coerce')
-cutoff_date = pd.to_datetime('2024-01-20')
+cutoff_date = pd.to_datetime('2024-06-01')
 condition_date = df['IPO Date'] < cutoff_date
 condition_price = df['IPO Price'].astype(str) != '-'
-df_filtered = df[condition_date & condition_price].copy()
+df_filtered = df[condition_date & condition_price].copy().reset_index(drop=True)
 
 print(df_filtered)
 
@@ -314,5 +314,33 @@ stocks_df['Sharpe'] = (stocks_df['growth_252d'] - 0.045) / stocks_df['volatility
 
 condition_day = stocks_df['Date'].astype(str) == "2025-06-06"
 stocks_df_filtered = stocks_df[condition_day].copy()
-print(stocks_df_filtered['growth_252d'].describe())
-print(stocks_df_filtered['Sharpe'].describe())
+
+min_data = pd.DataFrame()
+min_data['Ticker'] = df_filtered['Symbol']
+
+earliest_dates = {}
+
+for ticker in min_data['Ticker']:
+    ticker_data = stocks_df[
+        (stocks_df['Ticker'] == ticker) &
+        (stocks_df['Close'].notna())
+    ]
+    if not ticker_data.empty:
+        earliest_date = ticker_data['Date'].min()
+        earliest_dates[ticker] = earliest_date
+    else:
+        earliest_dates[ticker] = pd.NaT
+
+min_data['Date'] = min_data['Ticker'].map(earliest_dates)
+
+stocks_df_cleaned = stocks_df.reset_index(drop=True)
+
+merged_df = pd.merge(
+    min_data,
+    stocks_df_cleaned,
+    on=['Ticker', 'Date'],
+    how='inner'
+)
+
+for i in range(1,13):
+    print(merged_df['future_growth_'+str(i)+'m'].mean())
