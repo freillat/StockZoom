@@ -5,6 +5,7 @@ from io import StringIO
 import re
 import time
 import yfinance as yf
+import talib
 
 # Question 1
 
@@ -125,99 +126,99 @@ print(total_withdrawn_by_class/1000000)
 
 # # Question 2
 
-# url = f"https://stockanalysis.com/ipos/2024/"
+url = f"https://stockanalysis.com/ipos/2024/"
 
-# headers = {
-#     'User-Agent': (
-#         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-#         'AppleWebKit/537.36 (KHTML, like Gecko) '
-#         'Chrome/58.0.3029.110 Safari/537.3'
-#     )
-# }
+headers = {
+    'User-Agent': (
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+        'AppleWebKit/537.36 (KHTML, like Gecko) '
+        'Chrome/58.0.3029.110 Safari/537.3'
+    )
+}
 
-# try:
-#     response = requests.get(url, headers=headers, timeout=10)
-#     response.raise_for_status()
+try:
+    response = requests.get(url, headers=headers, timeout=10)
+    response.raise_for_status()
 
-#     # Wrap HTML text in StringIO to avoid deprecation warning
-#     # "Passing literal html to 'read_html' is deprecated and will be removed in a future version. To read from a literal string, wrap it in a 'StringIO' object."
-#     html_io = StringIO(response.text)
-#     tables = pd.read_html(html_io)
+    # Wrap HTML text in StringIO to avoid deprecation warning
+    # "Passing literal html to 'read_html' is deprecated and will be removed in a future version. To read from a literal string, wrap it in a 'StringIO' object."
+    html_io = StringIO(response.text)
+    tables = pd.read_html(html_io)
 
-#     if not tables:
-#         raise ValueError(f"No tables found for year {year}.")
+    if not tables:
+        raise ValueError(f"No tables found for year {year}.")
 
-# except requests.exceptions.RequestException as e:
-#     print(f"Request failed: {e}")
-# except ValueError as ve:
-#     print(f"Data error: {ve}")
-# except Exception as ex:
-#     print(f"Unexpected error: {ex}")
+except requests.exceptions.RequestException as e:
+    print(f"Request failed: {e}")
+except ValueError as ve:
+    print(f"Data error: {ve}")
+except Exception as ex:
+    print(f"Unexpected error: {ex}")
 
-# df = tables[0]
-# df['IPO Date'] = pd.to_datetime(df['IPO Date'], errors='coerce')
-# cutoff_date = pd.to_datetime('2024-06-01')
-# condition_date = df['IPO Date'] < cutoff_date
-# condition_price = df['IPO Price'].astype(str) != '-'
-# df_filtered = df[condition_date & condition_price].copy()
+df = tables[0]
+df['IPO Date'] = pd.to_datetime(df['IPO Date'], errors='coerce')
+cutoff_date = pd.to_datetime('2024-06-01')
+condition_date = df['IPO Date'] < cutoff_date
+condition_price = df['IPO Price'].astype(str) != '-'
+df_filtered = df[condition_date & condition_price].copy()
 
-# print(df_filtered)
+print(df_filtered)
 
-# stocks_df = pd.DataFrame({'A' : []})
+stocks_df = pd.DataFrame({'A' : []})
 
-# for i,ticker in enumerate(df_filtered['Symbol']):
-#   print(i,ticker)
+for i,ticker in enumerate(df_filtered['Symbol']):
+  print(i,ticker)
 
-#   # Work with stock prices
-#   ticker_obj = yf.Ticker(ticker)
+  # Work with stock prices
+  ticker_obj = yf.Ticker(ticker)
 
-#   # historyPrices = yf.download(tickers = ticker,
-#   #                    period = "max",
-#   #                    interval = "1d")
-#   historyPrices = ticker_obj.history(
-#                      period = "max",
-#                      interval = "1d")
+  # historyPrices = yf.download(tickers = ticker,
+  #                    period = "max",
+  #                    interval = "1d")
+  historyPrices = ticker_obj.history(
+                     period = "max",
+                     interval = "1d")
 
-#   # generate features for historical prices, and what we want to predict
-#   historyPrices['Ticker'] = ticker
-#   historyPrices['Year']= historyPrices.index.year
-#   historyPrices['Month'] = historyPrices.index.month
-#   historyPrices['Weekday'] = historyPrices.index.weekday
-#   historyPrices['Date'] = historyPrices.index.date
+  # generate features for historical prices, and what we want to predict
+  historyPrices['Ticker'] = ticker
+  historyPrices['Year']= historyPrices.index.year
+  historyPrices['Month'] = historyPrices.index.month
+  historyPrices['Weekday'] = historyPrices.index.weekday
+  historyPrices['Date'] = historyPrices.index.date
 
-#   # historical returns
-#   for i in [1,3,7,30,90,252,365]:
-#     historyPrices['growth_'+str(i)+'d'] = historyPrices['Close'] / historyPrices['Close'].shift(i)
-#   historyPrices['growth_future_30d'] = historyPrices['Close'].shift(-30) / historyPrices['Close']
+  # historical returns
+  for i in [1,3,7,30,90,252,365]:
+    historyPrices['growth_'+str(i)+'d'] = historyPrices['Close'] / historyPrices['Close'].shift(i)
+  historyPrices['growth_future_30d'] = historyPrices['Close'].shift(-30) / historyPrices['Close']
 
-#   # Technical indicators
-#   # SimpleMovingAverage 10 days and 20 days
-#   historyPrices['SMA10']= historyPrices['Close'].rolling(10).mean()
-#   historyPrices['SMA20']= historyPrices['Close'].rolling(20).mean()
-#   historyPrices['growing_moving_average'] = np.where(historyPrices['SMA10'] > historyPrices['SMA20'], 1, 0)
-#   historyPrices['high_minus_low_relative'] = (historyPrices.High - historyPrices.Low) / historyPrices['Close']
+  # Technical indicators
+  # SimpleMovingAverage 10 days and 20 days
+  historyPrices['SMA10']= historyPrices['Close'].rolling(10).mean()
+  historyPrices['SMA20']= historyPrices['Close'].rolling(20).mean()
+  historyPrices['growing_moving_average'] = np.where(historyPrices['SMA10'] > historyPrices['SMA20'], 1, 0)
+  historyPrices['high_minus_low_relative'] = (historyPrices.High - historyPrices.Low) / historyPrices['Close']
 
-#   # 30d rolling volatility : https://ycharts.com/glossary/terms/rolling_vol_30
-#   historyPrices['volatility'] =   historyPrices['Close'].rolling(30).std() * np.sqrt(252)
+  # 30d rolling volatility : https://ycharts.com/glossary/terms/rolling_vol_30
+  historyPrices['volatility'] =   historyPrices['Close'].rolling(30).std() * np.sqrt(252)
 
-#   # what we want to predict
-#   historyPrices['is_positive_growth_30d_future'] = np.where(historyPrices['growth_future_30d'] > 1, 1, 0)
+  # what we want to predict
+  historyPrices['is_positive_growth_30d_future'] = np.where(historyPrices['growth_future_30d'] > 1, 1, 0)
 
-#   # sleep 1 sec between downloads - not to overload the API server
-#   time.sleep(1)
+  # sleep 1 sec between downloads - not to overload the API server
+  time.sleep(1)
 
 
-#   if stocks_df.empty:
-#     stocks_df = historyPrices
-#   else:
-#     stocks_df = pd.concat([stocks_df, historyPrices], ignore_index=True)
+  if stocks_df.empty:
+    stocks_df = historyPrices
+  else:
+    stocks_df = pd.concat([stocks_df, historyPrices], ignore_index=True)
 
-# stocks_df['Sharpe'] = (stocks_df['growth_252d'] - 0.045) / stocks_df['volatility']
+stocks_df['Sharpe'] = (stocks_df['growth_252d'] - 0.045) / stocks_df['volatility']
 
-# condition_day = stocks_df['Date'].astype(str) == "2025-06-06"
-# stocks_df_filtered = stocks_df[condition_day].copy()
-# print(stocks_df_filtered['growth_252d'].describe())
-# print(stocks_df_filtered['Sharpe'].describe())
+condition_day = stocks_df['Date'].astype(str) == "2025-06-06"
+stocks_df_filtered = stocks_df[condition_day].copy()
+print(stocks_df_filtered['growth_252d'].describe())
+print(stocks_df_filtered['Sharpe'].describe())
 
 # Question 3
 
@@ -344,3 +345,100 @@ merged_df = pd.merge(
 
 for i in range(1,13):
     print(merged_df['future_growth_'+str(i)+'m'].mean())
+
+# Question 4
+
+# https://companiesmarketcap.com/usa/largest-companies-in-the-usa-by-market-cap/
+US_STOCKS = ['MSFT', 'AAPL', 'GOOG', 'NVDA', 'AMZN', 'META', 'BRK-B', 'LLY', 'AVGO','V', 'JPM']
+
+# You're required to add EU_STOCKS and INDIA_STOCS
+# https://companiesmarketcap.com/european-union/largest-companies-in-the-eu-by-market-cap/
+EU_STOCKS = ['NVO','MC.PA', 'ASML', 'RMS.PA', 'OR.PA', 'SAP', 'ACN', 'TTE', 'SIE.DE','IDEXY','CDI.PA']
+
+# https://companiesmarketcap.com/india/largest-companies-in-india-by-market-cap/
+INDIA_STOCKS = ['RELIANCE.NS','TCS.NS','HDB','BHARTIARTL.NS','IBN','SBIN.NS','LICI.NS','INFY','ITC.NS','HINDUNILVR.NS','LT.NS']
+
+ALL_TICKERS = US_STOCKS + EU_STOCKS + INDIA_STOCKS
+
+stocks_df = pd.DataFrame({'A' : []})
+
+for i,ticker in enumerate(ALL_TICKERS):
+  print(i,ticker)
+
+  # Work with stock prices
+  ticker_obj = yf.Ticker(ticker)
+
+  # historyPrices = yf.download(tickers = ticker,
+  #                    period = "max",
+  #                    interval = "1d")
+  historyPrices = ticker_obj.history(
+                     period = "max",
+                     interval = "1d")
+
+  # generate features for historical prices, and what we want to predict
+  historyPrices['Ticker'] = ticker
+  historyPrices['Year']= historyPrices.index.year
+  historyPrices['Month'] = historyPrices.index.month
+  historyPrices['Weekday'] = historyPrices.index.weekday
+  historyPrices['Date'] = historyPrices.index.date
+
+  # historical returns
+  for i in [1,3,7,30,90,365]:
+    historyPrices['growth_'+str(i)+'d'] = historyPrices['Close'] / historyPrices['Close'].shift(i)
+  historyPrices['growth_future_30d'] = historyPrices['Close'].shift(-30) / historyPrices['Close']
+
+  # Technical indicators
+  # SimpleMovingAverage 10 days and 20 days
+  historyPrices['SMA10']= historyPrices['Close'].rolling(10).mean()
+  historyPrices['SMA20']= historyPrices['Close'].rolling(20).mean()
+  historyPrices['growing_moving_average'] = np.where(historyPrices['SMA10'] > historyPrices['SMA20'], 1, 0)
+  historyPrices['high_minus_low_relative'] = (historyPrices.High - historyPrices.Low) / historyPrices['Close']
+
+  # 30d rolling volatility : https://ycharts.com/glossary/terms/rolling_vol_30
+  historyPrices['volatility'] =   historyPrices['Close'].rolling(30).std() * np.sqrt(252)
+
+  # what we want to predict
+  historyPrices['is_positive_growth_30d_future'] = np.where(historyPrices['growth_future_30d'] > 1, 1, 0)
+
+  # sleep 1 sec between downloads - not to overload the API server
+  time.sleep(1)
+
+
+  if stocks_df.empty:
+    stocks_df = historyPrices
+  else:
+    stocks_df = pd.concat([stocks_df, historyPrices], ignore_index=True)
+
+def get_ticker_type(ticker:str, us_stocks_list, eu_stocks_list, india_stocks_list):
+  if ticker in us_stocks_list:
+    return 'US'
+  elif ticker in eu_stocks_list:
+    return 'EU'
+  elif ticker in india_stocks_list:
+    return 'INDIA'
+  else:
+    return 'ERROR'
+  
+stocks_df['ticker_type'] = stocks_df.Ticker.apply(lambda x:get_ticker_type(x, US_STOCKS, EU_STOCKS, INDIA_STOCKS))
+stocks_df['Date'] = pd.to_datetime(stocks_df['Date'])
+
+ind = pd.DataFrame()
+tind = pd.DataFrame()
+for ticker in stocks_df['Ticker'].unique():
+    tind['rsi'] = talib.RSI(stocks_df.loc[stocks_df['Ticker'] == ticker, 'Close'], 14)
+    ind = pd.concat([ind,tind])
+    tind = tind.iloc[0:0]
+
+stocks_df = pd.merge(stocks_df, ind, left_index=True, right_index=True)
+
+rsi_threshold = 25
+selected_df = stocks_df[
+    (stocks_df['rsi'] < rsi_threshold) &
+    (stocks_df['Date'] >= '2000-01-01') &
+    (stocks_df['Date'] <= '2025-06-01')
+]
+
+net_income = 1000 * (selected_df['growth_future_30d'] - 1).sum()
+print(selected_df.describe())
+print(selected_df['Date'].describe())
+print(net_income)
