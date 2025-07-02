@@ -22,7 +22,7 @@ from sklearn.metrics import accuracy_score
 from sklearn.metrics import precision_score
 
 df_full = pd.read_parquet("./content/stocks_df_combined_2025_06_13.parquet.brotli")
-print(df_full.info())
+# print(df_full.info())
 # growth indicators (but not future growth)
 GROWTH = [g for g in df_full.keys() if (g.find('growth_')==0)&(g.find('future')<0)]
 # leaving only Volume ==> generate ln(Volume)
@@ -46,7 +46,7 @@ TECHNICAL_INDICATORS = ['adx', 'adxr', 'apo', 'aroon_1','aroon_2', 'aroonosc',
  'ht_phasor_inphase', 'ht_phasor_quadrature', 'ht_sine_sine', 'ht_sine_leadsine',
  'ht_trendmod', 'avgprice', 'medprice', 'typprice', 'wclprice']
 TECHNICAL_PATTERNS = [g for g in df_full.keys() if g.find('cdl')>=0]
-print(f'Technical patterns count = {len(TECHNICAL_PATTERNS)}, examples = {TECHNICAL_PATTERNS[0:5]}')
+# print(f'Technical patterns count = {len(TECHNICAL_PATTERNS)}, examples = {TECHNICAL_PATTERNS[0:5]}')
 MACRO = ['gdppot_us_yoy', 'gdppot_us_qoq', 'cpi_core_yoy', 'cpi_core_mom', 'FEDFUNDS',
  'DGS1', 'DGS5', 'DGS10']
 NUMERICAL = GROWTH + TECHNICAL_INDICATORS + TECHNICAL_PATTERNS + CUSTOM_NUMERICAL + MACRO
@@ -71,9 +71,6 @@ dummy_variables = pd.get_dummies(df[CATEGORICAL], dtype='int32')
 # get dummies names in a list
 DUMMIES = dummy_variables.keys().to_list()
 # Concatenate the dummy variables with the original DataFrame
-
-
-
 df_with_dummies = pd.concat([df, dummy_variables], axis=1)
 corr_is_positive_growth_30d_future = df_with_dummies[NUMERICAL+DUMMIES+TO_PREDICT].corr()['is_positive_growth_30d_future']
 corr_is_positive_growth_30d_future_df = pd.DataFrame(corr_is_positive_growth_30d_future)
@@ -81,8 +78,8 @@ corr_is_positive_growth_30d_future_df = pd.DataFrame(corr_is_positive_growth_30d
 # Filter the correlation results to include only the dummy variables generated from month_wom
 prefix_to_filter = 'month_wom'
 filtered_df = corr_is_positive_growth_30d_future_df[corr_is_positive_growth_30d_future_df.index.str.startswith(prefix_to_filter)]
-filtered_df['abs_corr'] = filtered_df['is_positive_growth_30d_future'].abs()
-print(filtered_df.sort_values(by='abs_corr', ascending=False).head(10))
+filtered_df.loc[:,'abs_corr'] = filtered_df['is_positive_growth_30d_future'].abs()
+print(filtered_df.sort_values(by='abs_corr', ascending=False).head(5))
 
 # Question 2
 
@@ -120,12 +117,15 @@ def temporal_split(df, min_date, max_date, train_prop=0.7, val_prop=0.15, test_p
 
     return df
 
-df_with_dummies = temporal_split(df_with_dummies, df_with_dummies['Date'].min(), df_with_dummies['Date'].max())
-new_df = df_with_dummies.copy()
+new_df = temporal_split(df_with_dummies, df_with_dummies['Date'].min(), df_with_dummies['Date'].max()).copy()
 print(new_df.groupby(['split'])['Date'].agg({'min','max','count'}))
 
-new_df['pred3_manual_dgs10_5'] = (new_df['DGS10'] <= 4.825) & (new_df['DGS5'] <= 0.745)
-new_df['pred4_manual_dgs10_fedfunds'] = (new_df['DGS10'] > 4.825) & (new_df['FEDFUNDS'] <= 4.795)
+new_df['pred0_manual_cci'] = (new_df.cci>200).astype(int)
+new_df['pred1_manual_prev_g1'] = (new_df.growth_30d>1).astype(int)
+new_df['pred2_manual_prev_g1_and_snp'] = ((new_df['growth_30d'] > 1) & (new_df['growth_snp500_30d'] > 1)).astype(int)
+
+new_df['pred3_manual_dgs10_5'] = ((new_df['DGS10'] <= 4) & (new_df['DGS5'] <= 1)).astype(int)
+new_df['pred4_manual_dgs10_fedfunds'] = ((new_df['DGS10'] > 4) & (new_df['FEDFUNDS'] <= 4.795)).astype(int)
 
 # Check the correlation of the new predictions with the target variable
 corr_pred3 = new_df['pred3_manual_dgs10_5'].corr(new_df['is_positive_growth_30d_future'])
@@ -133,24 +133,29 @@ corr_pred4 = new_df['pred4_manual_dgs10_fedfunds'].corr(new_df['is_positive_grow
 print(f'Correlation of pred3 with is_positive_growth_30d_future: {corr_pred3}')
 print(f'Correlation of pred4 with is_positive_growth_30d_future: {corr_pred4}')
 
-new_df['is_correct_pred3'] = (new_df.pred3_manual_dgs10_5 == new_df.is_positive_growth_30d_future)
-new_df['is_correct_pred4'] = (new_df.pred4_manual_dgs10_fedfunds == new_df.is_positive_growth_30d_future)
+PREDICTIONS = [k for k in new_df.keys() if k.startswith('pred')]
+print(PREDICTIONS)
 
-print(new_df.groupby(['split'])[['is_correct_pred3', 'is_correct_pred4']].sum())
-print(new_df.groupby(['split'])[['is_correct_pred3', 'is_correct_pred4']].count())
+# generate columns is_correct_
+for pred in PREDICTIONS:
+  part1 = pred.split('_')[0] # first prefix before '_'
+  new_df[f'is_correct_{part1}'] =  (new_df[pred] == new_df.is_positive_growth_30d_future).astype(int)
 
-TP = new_df[new_df['split']=='test'].is_correct_pred3.sum()
-TPFP = new_df[new_df['split']=='test'].is_correct_pred3.count()
-result = TP / TPFP
-print(f"{result:.3f}")
-filter = (new_df.split=='test') & (new_df.pred0_manual_cci==1)
-new_df[filter].is_correct_prediction.value_counts()
+IS_CORRECT =  [k for k in new_df.keys() if k.startswith('is_correct_')]
+print(IS_CORRECT)
+
+# define "Precision" for ALL predictions on a Test dataset (~4 last years of trading)
+for i,column in enumerate(IS_CORRECT):
+  prediction_column = PREDICTIONS[i]
+  is_correct_column = column
+  filter = (new_df.split=='test') & (new_df[prediction_column]==1)
+  print(f'Prediction column:{prediction_column} , is_correct_column: {is_correct_column}')
+  print(new_df[filter][is_correct_column].value_counts())
+  print(new_df[filter][is_correct_column].value_counts()/len(new_df[filter]))
+
+  print('---------')
 
 # Question 3
-
-new_df['pred0_manual_cci'] = (new_df.cci>200).astype(int)
-new_df['pred1_manual_prev_g1'] = (new_df.growth_30d>1).astype(int)
-new_df['pred2_manual_prev_g1_and_snp'] = ((new_df['growth_30d'] > 1) & (new_df['growth_snp500_30d'] > 1)).astype(int)
 
 def remove_infinite_values(X):
     """
@@ -198,28 +203,33 @@ print(f'length: X_train_imputed {X_train.shape},  X_test_imputed {X_test.shape}'
 
 X_train_imputed = X_train # we won't use outliers removal to save more data to train: remove_outliers_percentile(X_train)
 X_test_imputed = X_test # we won't use outliers removal to save more data to test: remove_outliers_percentile(X_test)
+X_all = pd.concat([X_train_imputed, X_test_imputed], axis=0)
 
 # same shape
 print(f'length: X_train_imputed {X_train_imputed.shape},  X_test_imputed {X_test_imputed.shape}')
+print(f'length: X_all {X_all.shape}')
 
 y_train = X_train_imputed[to_predict]
 y_test = X_test_imputed[to_predict]
+y_all = X_all[to_predict]
 
 # remove y_train, y_test from X_ dataframes
 del X_train_imputed[to_predict]
 del X_test_imputed[to_predict]
+del X_all[to_predict]
 
 clf = DecisionTreeClassifier(max_depth=10, random_state=42) 
 clf.fit(X_train_imputed.drop(['Date','Ticker'],axis=1), y_train)
-X_test_imputed.drop(['Date','Ticker'],axis=1), y_test
-y_pred = clf.predict(X_test_imputed.drop(['Date','Ticker'],axis=1))
-result_df = pd.concat([X_test_imputed.drop(['Date','Ticker'],axis=1), y_test, pd.Series(y_pred, index=X_test_imputed.drop(['Date','Ticker'],axis=1).index, name='pred_')], axis=1)
-print(result_df.pred_.value_counts())
+# X_test_imputed.drop(['Date','Ticker'],axis=1), y_test
+# y_pred = clf.predict(X_test_imputed.drop(['Date','Ticker'],axis=1))
+# result_df = pd.concat([X_test_imputed.drop(['Date','Ticker'],axis=1), y_test, pd.Series(y_pred, index=X_test_imputed.drop(['Date','Ticker'],axis=1).index, name='pred_')], axis=1)
 
-PREDICTIONS = [k for k in new_df.keys() if k.startswith('pred')]
-# generate columns is_correct_
-for pred in PREDICTIONS:
-  part1 = pred.split('_')[0] # first prefix before '_'
-  new_df[f'is_correct_{part1}'] =  (new_df[pred] == new_df.is_positive_growth_30d_future).astype(int)
+new_df['pred5_clf_10'] = clf.predict(X_all.drop(['Date','Ticker'],axis=1))
+print(new_df.pred5_clf_10.value_counts())
+new_df['is_correct_pred5'] =  (new_df['pred5_clf_10'] == new_df[to_predict]).astype(int)
+print(new_df.is_correct_pred5.value_counts())
+new_df['only_pred5_is_correct'] = ((new_df['is_correct_pred5'] ==1) & (new_df['is_correct_pred0']==0) & (new_df['is_correct_pred1']==0) & (new_df['is_correct_pred2']==0) & (new_df['is_correct_pred3']==0) & (new_df['is_correct_pred4']==0)).astype(int)
+print(new_df.only_pred5_is_correct.value_counts())
 
-IS_CORRECT =  [k for k in new_df.keys() if k.startswith('is_correct_')]
+filter = (new_df.split=='test') & (new_df['only_pred5_is_correct']==1)
+print(new_df[filter][['is_correct_pred0','is_correct_pred1','only_pred5_is_correct']].value_counts())
