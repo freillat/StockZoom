@@ -127,14 +127,14 @@ new_df['pred2_manual_prev_g1_and_snp'] = ((new_df['growth_30d'] > 1) & (new_df['
 new_df['pred3_manual_dgs10_5'] = ((new_df['DGS10'] <= 4) & (new_df['DGS5'] <= 1)).astype(int)
 new_df['pred4_manual_dgs10_fedfunds'] = ((new_df['DGS10'] > 4) & (new_df['FEDFUNDS'] <= 4.795)).astype(int)
 
-# Check the correlation of the new predictions with the target variable
-corr_pred3 = new_df['pred3_manual_dgs10_5'].corr(new_df['is_positive_growth_30d_future'])
-corr_pred4 = new_df['pred4_manual_dgs10_fedfunds'].corr(new_df['is_positive_growth_30d_future'])
-print(f'Correlation of pred3 with is_positive_growth_30d_future: {corr_pred3}')
-print(f'Correlation of pred4 with is_positive_growth_30d_future: {corr_pred4}')
+# # Check the correlation of the new predictions with the target variable
+# corr_pred3 = new_df['pred3_manual_dgs10_5'].corr(new_df['is_positive_growth_30d_future'])
+# corr_pred4 = new_df['pred4_manual_dgs10_fedfunds'].corr(new_df['is_positive_growth_30d_future'])
+# print(f'Correlation of pred3 with is_positive_growth_30d_future: {corr_pred3}')
+# print(f'Correlation of pred4 with is_positive_growth_30d_future: {corr_pred4}')
 
 PREDICTIONS = [k for k in new_df.keys() if k.startswith('pred')]
-print(PREDICTIONS)
+# print(PREDICTIONS)
 
 # generate columns is_correct_
 for pred in PREDICTIONS:
@@ -142,7 +142,7 @@ for pred in PREDICTIONS:
   new_df[f'is_correct_{part1}'] =  (new_df[pred] == new_df.is_positive_growth_30d_future).astype(int)
 
 IS_CORRECT =  [k for k in new_df.keys() if k.startswith('is_correct_')]
-print(IS_CORRECT)
+# print(IS_CORRECT)
 
 # define "Precision" for ALL predictions on a Test dataset (~4 last years of trading)
 for i,column in enumerate(IS_CORRECT):
@@ -179,13 +179,15 @@ to_predict = 'is_positive_growth_30d_future'
 
 train_df = new_df[new_df.split.isin(['train','validation'])].copy(deep=True)
 test_df = new_df[new_df.split.isin(['test'])].copy(deep=True)
+all_df = new_df.copy(deep=True)
 
 # ONLY numerical Separate features and target variable for training and testing sets
 # need Date and Ticker later when merging predictions to the dataset
 X_train = train_df[features_list+[to_predict,'Date','Ticker']]
 X_test = test_df[features_list+[to_predict,'Date','Ticker']]
+X_all = all_df[features_list+[to_predict,'Date','Ticker']]
 
-print(f'length: X_train {X_train.shape},  X_test {X_test.shape}')
+print(f'length: X_train {X_train.shape},  X_test {X_test.shape}, X_all {X_all.shape}')
 
 # Can't have +-inf values . E.g. ln(volume)=-inf when volume==0 => substitute with 0
 
@@ -194,42 +196,36 @@ pd.options.mode.chained_assignment = None  # default='warn'
 
 X_train.replace([np.inf, -np.inf], np.nan, inplace=True)
 X_test.replace([np.inf, -np.inf], np.nan, inplace=True)
+X_all.replace([np.inf, -np.inf], np.nan, inplace=True)
 
 # Need to fill NaNs somehow
 X_train.fillna(0, inplace=True)
 X_test.fillna(0, inplace=True)
+X_all.fillna(0, inplace=True)
 
-print(f'length: X_train_imputed {X_train.shape},  X_test_imputed {X_test.shape}')
+print(f'length: X_train_imputed {X_train.shape},  X_test_imputed {X_test.shape}, X_all_imputed {X_all.shape}')
 
 X_train_imputed = X_train # we won't use outliers removal to save more data to train: remove_outliers_percentile(X_train)
 X_test_imputed = X_test # we won't use outliers removal to save more data to test: remove_outliers_percentile(X_test)
-X_all = pd.concat([X_train_imputed, X_test_imputed], axis=0)
+X_all_imputed = X_all # we won't use outliers removal to save more data to train: remove_outliers_percentile(X_all)
 
 # same shape
-print(f'length: X_train_imputed {X_train_imputed.shape},  X_test_imputed {X_test_imputed.shape}')
-print(f'length: X_all {X_all.shape}')
+print(f'length: X_train_imputed {X_train_imputed.shape},  X_test_imputed {X_test_imputed.shape}, X_all_imputed {X_all_imputed.shape}')
 
 y_train = X_train_imputed[to_predict]
 y_test = X_test_imputed[to_predict]
-y_all = X_all[to_predict]
+y_all = X_all_imputed[to_predict]
 
 # remove y_train, y_test from X_ dataframes
 del X_train_imputed[to_predict]
 del X_test_imputed[to_predict]
-del X_all[to_predict]
+del X_all_imputed[to_predict]
 
 clf = DecisionTreeClassifier(max_depth=10, random_state=42) 
 clf.fit(X_train_imputed.drop(['Date','Ticker'],axis=1), y_train)
-# X_test_imputed.drop(['Date','Ticker'],axis=1), y_test
-# y_pred = clf.predict(X_test_imputed.drop(['Date','Ticker'],axis=1))
-# result_df = pd.concat([X_test_imputed.drop(['Date','Ticker'],axis=1), y_test, pd.Series(y_pred, index=X_test_imputed.drop(['Date','Ticker'],axis=1).index, name='pred_')], axis=1)
 
-new_df['pred5_clf_10'] = clf.predict(X_all.drop(['Date','Ticker'],axis=1))
-print(new_df.pred5_clf_10.value_counts())
+new_df['pred5_clf_10'] = clf.predict(X_all_imputed.drop(['Date','Ticker'],axis=1))
 new_df['is_correct_pred5'] =  (new_df['pred5_clf_10'] == new_df[to_predict]).astype(int)
-print(new_df.is_correct_pred5.value_counts())
 new_df['only_pred5_is_correct'] = ((new_df['is_correct_pred5'] ==1) & (new_df['is_correct_pred0']==0) & (new_df['is_correct_pred1']==0) & (new_df['is_correct_pred2']==0) & (new_df['is_correct_pred3']==0) & (new_df['is_correct_pred4']==0)).astype(int)
-print(new_df.only_pred5_is_correct.value_counts())
-
 filter = (new_df.split=='test') & (new_df['only_pred5_is_correct']==1)
-print(new_df[filter][['is_correct_pred0','is_correct_pred1','only_pred5_is_correct']].value_counts())
+print(new_df[filter]['only_pred5_is_correct'].value_counts())
