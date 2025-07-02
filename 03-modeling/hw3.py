@@ -229,3 +229,22 @@ new_df['is_correct_pred5'] =  (new_df['pred5_clf_10'] == new_df[to_predict]).ast
 new_df['only_pred5_is_correct'] = ((new_df['is_correct_pred5'] ==1) & (new_df['is_correct_pred0']==0) & (new_df['is_correct_pred1']==0) & (new_df['is_correct_pred2']==0) & (new_df['is_correct_pred3']==0) & (new_df['is_correct_pred4']==0)).astype(int)
 filter = (new_df.split=='test') & (new_df['only_pred5_is_correct']==1)
 print(new_df[filter]['only_pred5_is_correct'].value_counts())
+
+# Question 4
+
+best_max_depth = 0
+best_score = 0
+
+for max_depth in range(1,21):
+    clf = DecisionTreeClassifier(max_depth=max_depth, random_state=42) 
+    clf.fit(X_train_imputed.drop(['Date','Ticker'],axis=1), y_train)
+    y_pred = clf.predict(X_test_imputed.drop(['Date','Ticker'],axis=1))
+    TP = np.sum((y_pred == 1) & (y_test == 1))
+    FP = np.sum((y_pred == 1) & (y_test == 0))
+    precision_score = TP / (TP + FP) if (TP + FP) > 0 else 0
+    print(f'Max depth: {max_depth}, Precision score: {precision_score}')
+    if precision_score > best_score:
+        best_score = precision_score
+        best_max_depth = max_depth
+
+print(f'Best max depth: {best_max_depth}, Best precision score: {best_score}')
